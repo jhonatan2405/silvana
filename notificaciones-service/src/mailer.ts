@@ -11,8 +11,15 @@ export function renderEmail(mail:Mail,appUrl:string){
  return {attachments:[{filename:'silvana.png',content:readFileSync(new URL('../templates/silvana-mark.png',import.meta.url)),contentType:'image/png',cid:'silvana-mark@silvana.notifications',contentDisposition:'inline' as const}],subject:'Silvana · '+mail.title.replace(/[\r\n]/g,' '),html,text:mail.title+'\n\n'+mail.body+(mail.metric==='station_status'?'':'\nValor: '+values.value+'\nUmbral: '+values.threshold)+'\nHora de Montería: '+time+'\n\n'+url.href+'\nCambia tus preferencias desde Notificaciones.'};
 }
 export function smtpMailer():Mailer|null{
+ if(process.env.MAIL_TRANSPORT==='supabase')return supabaseMailer();
  const {SMTP_HOST,SMTP_USER,SMTP_PASSWORD,SMTP_FROM}=process.env;const port=Number(process.env.SMTP_PORT??465);
  if(!SMTP_HOST||!SMTP_USER||!SMTP_PASSWORD||!SMTP_FROM)return null;if(![465,587].includes(port))throw new Error('Usa SMTP_PORT 465 o 587.');
  const transport=nodemailer.createTransport({host:SMTP_HOST,port,secure:port===465,requireTLS:true,auth:{user:SMTP_USER,pass:SMTP_PASSWORD},tls:{rejectUnauthorized:true,minVersion:'TLSv1.2'},connectionTimeout:15000,greetingTimeout:15000,socketTimeout:20000,disableFileAccess:true,disableUrlAccess:true,logger:false,debug:false});
  return {send:async mail=>{const info=await transport.sendMail({from:{name:'Silvana',address:SMTP_FROM},to:{address:mail.to,name:''},messageId:'<'+mail.id+'@silvana.notifications>',...renderEmail(mail,process.env.APP_URL??'http://localhost:5173')});if(!info.accepted?.length)throw new Error('SMTP_REJECTED');},close:()=>transport.close()};
+}
+export function supabaseMailer():Mailer|null{
+ const endpoint=process.env.SUPABASE_MAIL_URL,token=process.env.SUPABASE_MAIL_TOKEN;
+ if(!endpoint||!token)return null;
+ const url=new URL(endpoint);if(url.protocol!=='https:'||url.username||url.password||!url.hostname.endsWith('.supabase.co')||url.pathname!=='/functions/v1/silvana-mail')throw new Error('SUPABASE_MAIL_URL inválida.');
+ return {send:async mail=>{const rendered=renderEmail(mail,process.env.APP_URL??'http://localhost:5173');const response=await fetch(url,{method:'POST',redirect:'error',signal:AbortSignal.timeout(30000),headers:{'content-type':'application/json','x-silvana-mail-token':token},body:JSON.stringify({id:mail.id,to:mail.to,subject:rendered.subject,html:rendered.html,text:rendered.text,logo:rendered.attachments[0].content.toString('base64')})});if(!response.ok)throw new Error('MAIL_RELAY_'+response.status);const result=await response.json() as {sent?:boolean};if(result.sent!==true)throw new Error('MAIL_RELAY_REJECTED');}};
 }
