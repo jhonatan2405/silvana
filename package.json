@@ -1,0 +1,32 @@
+{
+  "name": "silvana",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "engines": {
+    "node": ">=22.16.0"
+  },
+  "workspaces": [
+    "frontend",
+    "usuarios-auth-service",
+    "dispositivos-service",
+    "api-gateway",
+    "recepcion-iot-service",
+    "analisis-service",
+    "alertas-service",
+    "notificaciones-service"
+  ],
+  "scripts": {
+    "dev": "concurrently --kill-others-on-fail --names AUTH,DEVICES,RECEPTION,ANALYSIS,ALERTS,NOTIFICATIONS,GATEWAY,FRONTEND \"npm run dev -w usuarios-auth-service\" \"npm run dev -w dispositivos-service\" \"npm run dev -w recepcion-iot-service\" \"npm run dev -w analisis-service\" \"npm run dev -w alertas-service\" \"npm run dev -w notificaciones-service\" \"npm run dev -w api-gateway\" \"npm run dev -w frontend\"",
+    "build": "npm run build --workspaces --if-present",
+    "test": "tsx --test tests/node/*.test.ts",
+    "verify:gateway": "npm run verify:gateway -w usuarios-auth-service",
+    "verify:iot": "npm run verify:gateway -w recepcion-iot-service"
+  },
+  "devDependencies": {
+    "concurrently": "^9.0.0",
+    "tsx": "^4.20.0",
+    "typescript": "^5.7.2",
+    "@types/node": "^22.0.0"
+  }
+}

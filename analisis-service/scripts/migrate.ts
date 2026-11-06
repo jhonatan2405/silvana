@@ -1,0 +1,2 @@
+import {openDatabase} from '../src/database.js';import {serviceRoot} from '../src/config.js';import {initializeAnalysis} from '../src/app.js';
+const db=openDatabase(process.env.DATABASE_URL!,serviceRoot);try{await initializeAnalysis(db);console.log('Migración de analisis-service completada.');}catch(error){console.error('Migración no completada:',(error as any).code??'MIGRATION_ERROR');process.exitCode=1;}finally{await db.close();}

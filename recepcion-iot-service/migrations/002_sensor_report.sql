@@ -1,0 +1,1 @@
+ALTER TABLE readings ADD COLUMN IF NOT EXISTS sensor_report TEXT NOT NULL DEFAULT '[]';

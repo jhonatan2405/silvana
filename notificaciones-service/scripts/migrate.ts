@@ -1,0 +1,2 @@
+import {openDatabase} from '../src/database.js';import {serviceRoot} from '../src/config.js';import {initializeNotifications} from '../src/app.js';
+const db=openDatabase(process.env.DATABASE_URL!,serviceRoot);try{await initializeNotifications(db);console.log('Migración de notificaciones-service completada con TLS verificado.');}catch(error){console.error('Migración no completada:',(error as any).code??'MIGRATION_ERROR');process.exitCode=1;}finally{await db.close();}

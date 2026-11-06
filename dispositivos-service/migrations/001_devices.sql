@@ -1,0 +1,11 @@
+CREATE TABLE IF NOT EXISTS devices (
+ id VARCHAR(64) PRIMARY KEY, owner_id VARCHAR(64) NOT NULL,
+ name VARCHAR(100) NOT NULL, location VARCHAR(160) NOT NULL,
+ model VARCHAR(80) NOT NULL, active BOOLEAN NOT NULL,
+ credential_hash VARCHAR(64) NOT NULL UNIQUE, created_at TIMESTAMPTZ NOT NULL,
+ last_seen_at TIMESTAMPTZ
+);
+ALTER TABLE devices ADD COLUMN IF NOT EXISTS last_seen_at TIMESTAMPTZ;
+CREATE INDEX IF NOT EXISTS ix_devices_owner_id ON devices(owner_id);
+ALTER TABLE devices ENABLE ROW LEVEL SECURITY;
+REVOKE ALL ON TABLE devices FROM anon, authenticated;

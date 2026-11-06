@@ -1,0 +1,89 @@
+services:
+  usuarios:
+    build: ../usuarios-auth-service
+    environment:
+      DATABASE_URL: ${USUARIOS_DATABASE_URL:-sqlite:////data/usuarios.db}
+      FRONTEND_ORIGIN: http://localhost:8080
+      COOKIE_SECURE: 'false'
+    volumes:
+      - usuarios-data:/data
+  dispositivos:
+    build: ../dispositivos-service
+    environment:
+      DATABASE_URL: ${DISPOSITIVOS_DATABASE_URL:-sqlite:////data/dispositivos.db}
+      AUTH_SERVICE_URL: http://usuarios:8000
+      INTERNAL_SERVICE_TOKEN: ${INTERNAL_SERVICE_TOKEN:?Define un token interno compartido}
+      FRONTEND_ORIGIN: http://localhost:8080
+    volumes:
+      - dispositivos-data:/data
+  recepcion:
+    build: ../recepcion-iot-service
+    environment:
+      DATABASE_URL: ${RECEPCION_DATABASE_URL:-sqlite:////data/recepcion.db}
+      DEVICES_SERVICE_URL: http://dispositivos:8000
+      INTERNAL_SERVICE_TOKEN: ${INTERNAL_SERVICE_TOKEN:?Define un token interno compartido}
+      FRONTEND_ORIGIN: http://localhost:8080
+    volumes:
+      - recepcion-data:/data
+  analisis:
+    build: ../analisis-service
+    environment:
+      DATABASE_URL: ${ANALISIS_DATABASE_URL:-sqlite:////data/analisis.db}
+      AUTH_SERVICE_URL: http://usuarios:8000
+      DEVICES_SERVICE_URL: http://dispositivos:8000
+      RECEPTION_SERVICE_URL: http://recepcion:8000
+      INTERNAL_SERVICE_TOKEN: ${INTERNAL_SERVICE_TOKEN:?Define un token interno compartido}
+      FRONTEND_ORIGIN: http://localhost:8080
+    volumes:
+      - analisis-data:/data
+  alertas:
+    build: ../alertas-service
+    environment:
+      DATABASE_URL: ${ALERTAS_DATABASE_URL:-sqlite:////data/alertas.db}
+      AUTH_SERVICE_URL: http://usuarios:8000
+      DEVICES_SERVICE_URL: http://dispositivos:8000
+      RECEPTION_SERVICE_URL: http://recepcion:8000
+      INTERNAL_SERVICE_TOKEN: ${INTERNAL_SERVICE_TOKEN:?Define un token interno compartido}
+      FRONTEND_ORIGIN: http://localhost:8080
+    volumes:
+      - alertas-data:/data
+  notificaciones:
+    build: ../notificaciones-service
+    environment:
+      DATABASE_URL: ${NOTIFICACIONES_DATABASE_URL:-sqlite:////data/notificaciones.db}
+      AUTH_SERVICE_URL: http://usuarios:8000
+      ALERTS_SERVICE_URL: http://alertas:8000
+      DEVICES_SERVICE_URL: http://dispositivos:8000
+      INTERNAL_SERVICE_TOKEN: ${INTERNAL_SERVICE_TOKEN:?Define un token interno compartido}
+      FRONTEND_ORIGIN: http://localhost:8080
+      SMTP_HOST: ${SMTP_HOST:-smtp.gmail.com}
+      SMTP_PORT: ${SMTP_PORT:-465}
+      SMTP_USER: ${SMTP_USER:-}
+      SMTP_PASSWORD: ${SMTP_PASSWORD:-}
+      SMTP_FROM: ${SMTP_FROM:-}
+      APP_URL: ${APP_URL:-http://localhost:8080}
+    volumes:
+      - notificaciones-data:/data
+  gateway:
+    build: ../api-gateway
+    environment:
+      AUTH_SERVICE_URL: http://usuarios:8000
+      DEVICES_SERVICE_URL: http://dispositivos:8000
+      RECEPTION_SERVICE_URL: http://recepcion:8000
+      ANALYSIS_SERVICE_URL: http://analisis:8000
+      ALERTS_SERVICE_URL: http://alertas:8000
+      NOTIFICATIONS_SERVICE_URL: http://notificaciones:8000
+      FRONTEND_ORIGIN: http://localhost:8080
+  frontend:
+    build: ../frontend
+    ports:
+      - '127.0.0.1:8080:80'
+    depends_on:
+      - gateway
+volumes:
+  usuarios-data:
+  dispositivos-data:
+  recepcion-data:
+  analisis-data:
+  alertas-data:
+  notificaciones-data:

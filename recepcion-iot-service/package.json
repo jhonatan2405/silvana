@@ -1,0 +1,28 @@
+{
+  "name": "@silvana/ingestion",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "engines": {
+    "node": ">=22.16.0"
+  },
+  "scripts": {
+    "dev": "tsx watch src/server.ts",
+    "build": "tsc -p tsconfig.json",
+    "start": "node dist/server.js",
+    "migrate": "tsx scripts/migrate.ts",
+    "verify:gateway": "tsx scripts/verify-gateway.ts"
+  },
+  "dependencies": {
+    "fastify": "^5.0.0",
+    "dotenv": "^17.0.0",
+    "zod": "^4.0.0",
+    "pg": "^8.16.0"
+  },
+  "devDependencies": {
+    "typescript": "^5.7.2",
+    "tsx": "^4.20.0",
+    "@types/node": "^22.0.0",
+    "@types/pg": "^8.15.0"
+  }
+}

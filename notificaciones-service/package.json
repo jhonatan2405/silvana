@@ -1,0 +1,33 @@
+{
+  "name": "@silvana/notifications",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "engines": {
+    "node": ">=22.16.0"
+  },
+  "scripts": {
+    "dev": "tsx watch src/server.ts",
+    "build": "tsc -p tsconfig.json",
+    "start": "node dist/server.js",
+    "migrate": "tsx scripts/migrate.ts",
+    "verify:gateway": "tsx scripts/verify-gateway.ts",
+    "build:logo": "tsx scripts/build-email-logo.ts",
+    "preview:email": "tsx scripts/preview-email.ts"
+  },
+  "dependencies": {
+    "dotenv": "^17.0.0",
+    "fastify": "^5.0.0",
+    "nodemailer": "^10.3.1",
+    "pg": "^8.16.0",
+    "zod": "^4.0.0"
+  },
+  "devDependencies": {
+    "@resvg/resvg-js": "^2.6.2",
+    "@types/node": "^22.0.0",
+    "@types/nodemailer": "^7.0.0",
+    "@types/pg": "^8.15.0",
+    "tsx": "^4.20.0",
+    "typescript": "^5.7.2"
+  }
+}

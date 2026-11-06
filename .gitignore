@@ -1,0 +1,30 @@
+# Private environment and hardware credentials
+.env
+.env.*
+!.env.example
+**/config.h
+*.pem
+*.key
+*.eml
+
+# Dependencies and generated artifacts
+node_modules/
+dist/
+build/
+.venv/
+venv/
+__pycache__/
+*.py[cod]
+.pytest_cache/
+coverage/
+*.log
+*.db
+*.db-*
+*.tsbuildinfo
+.DS_Store
+Thumbs.db
+
+# Local work, visual review and archived implementation
+work/
+.impeccable/
+legacy/
