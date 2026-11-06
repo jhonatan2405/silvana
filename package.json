@@ -21,7 +21,8 @@
     "build": "npm run build --workspaces --if-present",
     "test": "tsx --test tests/node/*.test.ts",
     "verify:gateway": "npm run verify:gateway -w usuarios-auth-service",
-    "verify:iot": "npm run verify:gateway -w recepcion-iot-service"
+    "verify:iot": "npm run verify:gateway -w recepcion-iot-service",
+    "start:render": "node infra/start-render.mjs"
   },
   "devDependencies": {
     "concurrently": "^9.0.0",

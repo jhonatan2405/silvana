@@ -1,0 +1,31 @@
+services:
+  - type: web
+    name: silvana-api
+    runtime: docker
+    plan: free
+    region: virginia
+    branch: main
+    dockerfilePath: ./Dockerfile
+    dockerContext: .
+    healthCheckPath: /health
+    envVars:
+      - key: USUARIOS_DATABASE_URL
+        sync: false
+      - key: DISPOSITIVOS_DATABASE_URL
+        sync: false
+      - key: RECEPCION_DATABASE_URL
+        sync: false
+      - key: ANALISIS_DATABASE_URL
+        sync: false
+      - key: ALERTAS_DATABASE_URL
+        sync: false
+      - key: NOTIFICACIONES_DATABASE_URL
+        sync: false
+      - key: INTERNAL_SERVICE_TOKEN
+        generateValue: true
+      - key: FRONTEND_ORIGIN
+        sync: false
+      - key: APP_URL
+        sync: false
+      - key: COOKIE_SECURE
+        value: "true"

@@ -90,7 +90,7 @@ Los comandos `verify:gateway` presentes en algunos servicios verifican bases o p
 
 Cada componente tiene un `Dockerfile`. `infra/compose.yaml` describe la ejecución en contenedores con bases externas o volúmenes locales de desarrollo. Se debe proporcionar la configuración privada fuera del código. Los contenedores no se han validado con Docker en esta máquina.
 
-El despliegue público está pendiente. La propuesta es frontend en Vercel y backend en Render, validando recursos y límites gratuitos antes de publicarlo. Los archivos actuales no afirman que exista un despliegue agregado listo para Render. Render Free bloquea SMTP, por lo que el envío de correo allí requiere adaptar el transporte a una API HTTPS.
+El despliegue público está pendiente. La propuesta es frontend en Vercel y backend en Render, validando recursos y límites gratuitos antes de publicarlo. El Dockerfile de la raíz y el supervisor de procesos preparan el backend agregado; la [guía de Render](docs/despliegue-render.md) describe configuración, prueba aislada y limitaciones. La construcción y publicación se validan en el alojamiento. Render Free bloquea SMTP, por lo que el envío de correo allí requiere adaptar el transporte a una API HTTPS.
 
 ## Documentación
 
