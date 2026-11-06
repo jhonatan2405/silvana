@@ -88,9 +88,9 @@ Los comandos `verify:gateway` presentes en algunos servicios verifican bases o p
 
 ## Docker y despliegue
 
-Cada componente tiene un `Dockerfile`. `infra/compose.yaml` describe la ejecución en contenedores con bases externas o volúmenes locales de desarrollo. Se debe proporcionar la configuración privada fuera del código. Los contenedores no se han validado con Docker en esta máquina.
+Cada componente tiene un `Dockerfile`. `infra/compose.yaml` describe la ejecución en contenedores con bases externas o volúmenes locales de desarrollo. Se debe proporcionar la configuración privada fuera del código. La construcción Linux del Dockerfile raíz y el arranque de los siete procesos se validaron en Render; Docker no está instalado localmente.
 
-El despliegue público está pendiente. La propuesta es frontend en Vercel y backend en Render, validando recursos y límites gratuitos antes de publicarlo. El Dockerfile de la raíz y el supervisor de procesos preparan el backend agregado; la [guía de Render](docs/despliegue-render.md) describe configuración, prueba aislada y limitaciones. La construcción y publicación se validan en el alojamiento. Render Free bloquea SMTP, por lo que el envío de correo allí requiere adaptar el transporte a una API HTTPS.
+El backend está desplegado en Render Free: [comprobar Gateway](https://silvana-api.onrender.com/health). La construcción y el arranque de los seis microservicios con sus bases Supabase se verificaron el 6 de noviembre de 2026. El frontend en Vercel está pendiente. El Dockerfile de la raíz y el supervisor de procesos preparan el backend agregado; la [guía de Render](docs/despliegue-render.md) describe configuración, prueba aislada y limitaciones. La construcción y publicación se validan en el alojamiento. Render Free bloquea SMTP, por lo que el envío de correo allí requiere adaptar el transporte a una API HTTPS.
 
 ## Documentación
 

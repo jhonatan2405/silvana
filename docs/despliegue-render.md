@@ -20,8 +20,10 @@ infra/render.env.example enumera las seis conexiones privadas, token interno, or
 
 Tras compilar el backend, `node infra/verify-render.mjs` comprueba el supervisor real con seis bases SQLite temporales: arranque, registro, login, dispositivo, recepción y acceso a análisis, alertas y notificaciones a través del Gateway. No modifica las bases Supabase ni envía correo. El supervisor se detiene y elimina sus propias bases al finalizar.
 
-La prueba del arranque agrupado pasó localmente. No hay Docker instalado en este equipo; la construcción Linux de la imagen se comprueba en Render. No se considera desplegado hasta confirmar allí la compilación y la salud del Gateway.
+La prueba del arranque agrupado pasó localmente. La construcción Linux de la imagen terminó correctamente en Render y el servicio quedó Live en el plan Free el 6 de noviembre de 2026. Los seis servicios verificaron sus bases y el Gateway respondió HTTP 200 en https://silvana-api.onrender.com/health. Las rutas protegidas rechazaron consultas sin sesión y la ruta interna pública respondió 404. No se crearon cuentas de prueba en las bases reales para esta comprobación pública. El inicio de sesión desde el frontend definitivo queda pendiente de desplegar Vercel y configurar su origen.
 
 ## Límites de la entrega gratuita
 
 Render puede dormir la instancia sin tráfico. Mientras esté dormida no se ejecutan los detectores ni las colas. SMTP está bloqueado en Free: este despliegue inicial no configura las credenciales Gmail SMTP; los avisos web siguen funcionando y el correo requiere una integración HTTPS posterior. Las preferencias de la cuenta se conservan en su base independiente. Una preferencia activada no equivale a que exista un transporte disponible en este alojamiento.
+
+URL del backend: https://silvana-api.onrender.com . El endpoint /health es una comprobación de disponibilidad, no la interfaz web. La raíz del backend no sirve el frontend. Las conexiones PostgreSQL y el token interno se guardaron como variables privadas de Render con autorización del propietario; no están incluidos en la imagen ni en GitHub. El transporte SMTP local no se habilitó en Render Free.
