@@ -56,3 +56,10 @@ test('estaciones: conexión, pérdida tras un minuto, recuperación y habilitaci
 test('correo de estación contiene el estado y no presenta valores de sensores inventados',()=>{
  const message=renderEmail({id:randomUUID(),to:'test@example.com',title:'Estación conectada: Patio',body:'Se recibió comunicación válida de la estación.',metric:'station_status',value:1,threshold:0,measured_at:new Date().toISOString()},'https://silvana.example/');assert.ok(!message.html.includes('Medición recibida'));assert.ok(!message.html.includes('Umbral de tu regla'));assert.ok(!message.text.includes('Umbral:'));
 });
+
+
+test('recordatorio de incidencia entrega otro aviso con la misma alerta y no se duplica',async t=>{
+ const sent:any[]=[];const f=await notificationFixture(t,{mailer:{send:async mail=>{sent.push(mail);}}});await f.gateway.inject({method:'PUT',url:'/api/notifications/preferences',headers:{cookie:f.cookie},payload:prefs});const id=await createRule(f);await send(f,35);await f.notifications.syncOnce();await f.notifications.sendEmails();
+ await f.alerts.db.query('UPDATE alert_states SET last_notified_at=$1 WHERE rule_id=$2',[new Date(Date.now()-3600001),id]);await send(f,36);await f.notifications.syncOnce();await f.notifications.syncOnce();await f.notifications.sendEmails();
+ const items=(await list(f)).json().items;const reminder=items.find((x:any)=>x.title.startsWith('Recordatorio:'));assert.ok(reminder);assert.equal(reminder.event_id,items.find((x:any)=>x.title.startsWith('Alerta:')).event_id);assert.equal(sent.filter(x=>x.title.startsWith('Recordatorio:')).length,1);
+});

@@ -2,7 +2,7 @@ import {createAirportReference} from './localStations.js';
 import {readFile} from 'node:fs/promises';
 import {z} from 'zod';
 import {createHttp,HttpError} from './http.js';
-import {createWeatherReference} from './weatherReference.js';
+import {createWeatherReference,periodSchema,periodHours} from './weatherReference.js';
 import {openDatabase,utcDate,type Database} from './database.js';
 import {serviceRoot} from './config.js';
 import {ownedDevice,owner,createWorker} from './upstream.js';
@@ -21,27 +21,28 @@ export async function createAnalysis(options:{databaseUrl?:string;logger?:boolea
  app.get('/health',async()=>({status:'ok',service:'analisis',runtime:'nodejs'}));app.get('/ready',async()=>{await db.query('SELECT reading_id FROM analysis_samples LIMIT 1');return {status:'ready',sync:worker.status()};});
  const weatherReference=createWeatherReference(options.weatherFetch),airportReference=createAirportReference(options.weatherFetch);
  app.get('/analysis/external',async request=>{
-  const data=z.object({source:z.enum(['open-meteo','skmr']),period:z.enum(['1h','24h','7d','30d','365d','all']).default('24h')}).strict().parse(request.query);
+  const data=z.object({source:z.enum(['open-meteo','skmr']),period:periodSchema.default('24h')}).strict().parse(request.query);
   await owner(request.headers.cookie,authUrl);
   try{return await (data.source==='skmr'?airportReference(data.period):weatherReference(data.period));}catch{throw new HttpError(503,'La fuente externa no responde. Inténtalo en un minuto. Tus lecturas locales se conservan.');}
  });
  app.get('/analysis/reference',async request=>{
-  const data=z.object({device_id:z.string().regex(/^[a-f0-9]{32}$/),period:z.enum(['1h','24h','7d','30d','365d','all']).default('24h'),source:z.enum(['open-meteo','skmr']).default('open-meteo')}).strict().parse(request.query);
+  const data=z.object({device_id:z.string().regex(/^[a-f0-9]{32}$/),period:periodSchema.default('24h'),source:z.enum(['open-meteo','skmr']).default('open-meteo')}).strict().parse(request.query);
   await ownedDevice(data.device_id,request.headers.cookie,authUrl,devicesUrl);
   try{return await (data.source==='skmr'?airportReference(data.period):weatherReference(data.period));}catch{throw new HttpError(503,'La referencia meteorológica no está disponible. Tus mediciones siguen disponibles; inténtalo en un minuto.');}
  });
  app.get('/analysis/summary',async request=>{
-  const data=z.object({device_id:z.string().regex(/^[a-f0-9]{32}$/),period:z.enum(['1h','24h','7d','30d','365d','all']).default('24h'),aggregation:z.enum(['auto','hour','day','month','year']).default('auto')}).strict().parse(request.query);
+  const data=z.object({device_id:z.string().regex(/^[a-f0-9]{32}$/),period:periodSchema.default('24h'),aggregation:z.enum(['auto','minute','hour','day','month','year']).default('auto')}).strict().parse(request.query);
   const user=await ownedDevice(data.device_id,request.headers.cookie,authUrl,devicesUrl);const end=new Date();const earliest=data.period==='all'?(await db.query('SELECT MIN(measured_at) AS first FROM analysis_samples WHERE owner_id=$1 AND device_id=$2 AND measured_at<=$3',[user.id,data.device_id,end]))[0]?.first:null;
-  const since=data.period==='all'?(earliest?utcDate(earliest):new Date(end.getTime()-86400000)):new Date(end.getTime()-({'1h':1/24,'24h':1,'7d':7,'30d':30,'365d':365}[data.period])*86400000);
+  const since=data.period==='all'?(earliest?utcDate(earliest):new Date(end.getTime()-86400000)):new Date(end.getTime()-periodHours(data.period)*3600000);
   const duration=(end.getTime()-since.getTime())/86400000;const aggregation=data.aggregation==='auto'?(duration<=2?'hour':duration<=92?'day':duration<=1825?'month':'year'):data.aggregation;
+  if(aggregation==='minute'&&duration>2)throw new HttpError(422,'Por minuto está disponible hasta 48 horas. Reduce el período o agrupa por hora.');
   if(aggregation==='hour'&&duration>93)throw new HttpError(422,'Para más de 93 días, agrupa por día, mes o año.');
   if(aggregation==='day'&&duration>3660)throw new HttpError(422,'Para más de 10 años, agrupa por mes o año.');
   const where='owner_id=$1 AND device_id=$2 AND measured_at>=$3 AND measured_at<=$4',params=[user.id,data.device_id,since,end];
   const columns=['temperature_c','humidity_pct','pressure_hpa','temperature_bmp_c'] as const;
   const aggregate=columns.map(key=>`COUNT(${key}) AS ${key}_count, AVG(${key}) AS ${key}_avg, MIN(${key}) AS ${key}_min, MAX(${key}) AS ${key}_max, AVG(${key}*${key}) AS ${key}_square`).join(',');
-  const sqliteFormats={hour:'%Y-%m-%dT%H:00:00Z',day:'%Y-%m-%dT05:00:00Z',month:'%Y-%m-01T05:00:00Z',year:'%Y-01-01T05:00:00Z'};
-  const bucket=db.kind==='postgres'?(aggregation==='hour'?"date_trunc('hour',measured_at)":`date_trunc('${aggregation}',measured_at AT TIME ZONE 'America/Bogota') AT TIME ZONE 'America/Bogota'`):`strftime('${sqliteFormats[aggregation]}',${aggregation==='hour'?'measured_at':"datetime(measured_at,'-5 hours')"})`;
+  const sqliteFormats={minute:'%Y-%m-%dT%H:%M:00Z',hour:'%Y-%m-%dT%H:00:00Z',day:'%Y-%m-%dT05:00:00Z',month:'%Y-%m-01T05:00:00Z',year:'%Y-01-01T05:00:00Z'};
+  const bucket=db.kind==='postgres'?(['minute','hour'].includes(aggregation)?`date_trunc('${aggregation}',measured_at)`:`date_trunc('${aggregation}',measured_at AT TIME ZONE 'America/Bogota') AT TIME ZONE 'America/Bogota'`):`strftime('${sqliteFormats[aggregation]}',${['minute','hour'].includes(aggregation)?'measured_at':"datetime(measured_at,'-5 hours')"})`;
   const hourly=columns.map(key=>`AVG(${key}) AS ${key},MIN(${key}) AS ${key}_min,MAX(${key}) AS ${key}_max,COUNT(${key}) AS ${key}_count`).join(',');
   const [summaries,series]=await Promise.all([db.query('SELECT COUNT(*) AS samples,MAX(received_at) AS last_received_at,COUNT(rain_detected) AS rain_samples,SUM(CASE WHEN rain_detected=1 THEN 1 ELSE 0 END) AS wet_samples,'+aggregate+' FROM analysis_samples WHERE '+where,params),db.query('SELECT '+bucket+' AS bucket,COUNT(*) AS samples,SUM(CASE WHEN rain_detected=1 THEN 1 ELSE 0 END) AS wet_samples,COUNT(rain_detected) AS rain_samples,'+hourly+' FROM analysis_samples WHERE '+where+' GROUP BY bucket ORDER BY bucket',params)]);
   const summary=summaries[0];const numeric=(value:unknown)=>value===null||value===undefined?null:Number(value);

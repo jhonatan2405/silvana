@@ -65,3 +65,28 @@ El explorador horario ofrece recorrido con deslizador, pasos de quince minutos y
 Vista general, Recepción y Análisis comparten la estación elegida. Los Garzones/SKMR y Open-Meteo pueden ser la fuente principal del análisis; se conservan su procedencia, cobertura y variables ausentes. Los puntos clave describen cambio entre intervalos, amplitud y limitaciones de comparación; no son pronósticos ni validaciones de calibración.
 
 Verificación: 50 pruebas automatizadas aprobadas, incluidas regresión de retroceso horario y agregación externa sin valores inventados.
+
+
+## Mejoras locales: recordatorios y resolución de minutos
+
+Las reglas admiten repeat_minutes=0,60,120 (predeterminado 60 para reglas existentes). La incidencia se abre una sola vez. Un nuevo dato de hasta dos minutos de antigüedad confirma la condición y permite recordar tras el intervalo de reloj; el avance se guarda en alert_states.last_notified_at. Reconocer no detiene recordatorios; recuperar el umbral o pausar la regla sí. Los recordatorios usan el mismo event_id y un identificador de entrega independiente; no se duplican al repetir consumo y llegan por los canales habilitados. No se envían por ausencia de datos ni se reconstruye una secuencia de recordatorios atrasados. El historial de alertas muestra la fecha del último recordatorio.
+
+En Análisis, al desactivar la comparación desde 24 horas se abre la última hora por minuto. Se puede volver a 24 horas. El backend limita esta resolución a 48 horas y la comparación vuelve a intervalos horarios. El acercamiento permite ventanas de cinco minutos. Ritmo del período conserva el detalle por minuto sin unir huecos.
+
+Qué tener en cuenta ofrece sugerencias operativas con criterios visuales de 30 °C y 80 % de humedad explícitos. No establece límites universales, diagnósticos ni modifica las reglas del usuario.
+
+
+## Rangos personalizados y seguimiento de las fuentes
+
+El período se conserva al activar/desactivar comparación. El gráfico reinicia el acercamiento al cambiar fuente o modo, evitando ocultar puntos horarios al volver desde un zoom de minutos. El acercamiento sin selección histórica sigue el extremo más reciente; el botón Seguir lo más reciente permite recuperarlo.
+
+Se aceptan períodos horarios enteros de 1 a 8760 horas, además de los rangos y el histórico completo existentes. El límite de resolución por minuto sigue siendo 48 horas. Las fuentes externas se consultan con el rango elegido hasta su cobertura implementada de 30 días, con límite de 400 reportes de aeropuerto. Se distinguen la fecha de consulta y el último dato de origen. La fecha del último reporte no se reemplaza por la hora actual.
+
+Verificación: 58 pruebas aprobadas, incluidos rangos personalizados, series externas de varias horas y validación de acceso. Consulta directa a ambos proveedores respondió correctamente durante la revisión.
+
+
+## Comparación con resoluciones distintas
+
+La línea de la estación conserva promedios por minuto (hasta 48 horas), incluso al activar la comparación. Los puntos externos se mantienen horarios; se identifican con marcadores y no se crean mediciones minuto a minuto para la fuente externa. Si el cursor cae entre reportes, el inspector identifica la referencia anterior con su fecha, sin desplazar su marcador a una fecha inventada. Las diferencias media y absoluta se calculan agrupando los minutos por hora, ponderados por cantidad de lecturas válidas, y solo con horas coincidentes.
+
+Qué tener en cuenta conserva exactamente tres temas: temperatura, humedad y seguimiento/protección frente al agua. Los botones de la gráfica y del rango usan la paleta y los estados de foco del panel. Verificación: 59 pruebas aprobadas.

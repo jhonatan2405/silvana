@@ -1,6 +1,6 @@
 import Swal from 'sweetalert2';
 import 'sweetalert2/dist/sweetalert2.min.css';
-const dialog=Swal.mixin({heightAuto:false,scrollbarPadding:false,background:'#153b35',color:'#eef7ee',buttonsStyling:false,confirmButtonText:'Entendido',cancelButtonText:'Cancelar',customClass:{container:'silvana-feedback',popup:'silvana-popup',title:'silvana-popup-title',htmlContainer:'silvana-popup-copy',confirmButton:'silvana-confirm',cancelButton:'silvana-cancel',actions:'silvana-popup-actions'},showClass:{popup:'silvana-popup-enter'},hideClass:{popup:'silvana-popup-leave'}});
+const dialog=Swal.mixin({heightAuto:false,scrollbarPadding:false,background:'rgba(37,67,59,.58)',color:'#eef7ee',buttonsStyling:false,confirmButtonText:'Entendido',cancelButtonText:'Cancelar',customClass:{container:'silvana-feedback',popup:'silvana-popup',title:'silvana-popup-title',htmlContainer:'silvana-popup-copy',confirmButton:'silvana-confirm',cancelButton:'silvana-cancel',actions:'silvana-popup-actions'},showClass:{popup:'silvana-popup-enter'},hideClass:{popup:'silvana-popup-leave'}});
 export async function confirmAction(title:string,text:string,confirmButtonText='Confirmar'){
  if(Swal.isVisible()&&!Swal.getPopup()?.classList.contains('swal2-toast'))return false;
  const result=await dialog.fire({title,text,icon:'question',iconColor:'#b6ecd0',showCancelButton:true,confirmButtonText,focusCancel:true,allowOutsideClick:false});return result.isConfirmed;

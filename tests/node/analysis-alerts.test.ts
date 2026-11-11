@@ -79,3 +79,36 @@ test('reglas: no evalúa datos anteriores a su creación y valida umbrales y pro
  await f.gateway.inject({method:'POST',url:'/api/alerts/rules',headers:{cookie:f.cookie},payload:rule(f.device.id)});await f.alerts.syncOnce();const result=await f.gateway.inject({url:'/api/alerts?device_id='+f.device.id,headers:{cookie:f.cookie}});assert.equal(result.json().counts.total,0);
  assert.equal((await f.gateway.inject({method:'POST',url:'/api/alerts/rules',payload:rule(f.device.id)})).statusCode,401);
 });
+
+
+test('recordatorios: una incidencia, intervalo persistente, sin duplicados y recuperación',async t=>{
+ const f=await fixture(t);const created=await f.gateway.inject({method:'POST',url:'/api/alerts/rules',headers:{cookie:f.cookie},payload:{...rule(f.device.id),repeat_minutes:60}});assert.equal(created.statusCode,201);const id=created.json().rule.id;
+ const send=async(value:number)=>{await new Promise(r=>setTimeout(r,5));assert.equal((await f.send({...f.payload(),measurements:{temperature_c:value}})).statusCode,201);await f.alerts.syncOnce();};
+ await send(35);await send(36);assert.equal((await f.alerts.db.query('SELECT * FROM alert_notification_outbox')).length,1);
+ await f.alerts.db.query('UPDATE alert_states SET last_notified_at=$1 WHERE rule_id=$2',[new Date(Date.now()-3600001),id]);
+ await send(37);await f.alerts.syncOnce();assert.equal((await f.alerts.db.query('SELECT * FROM alert_events')).length,1);const out=await f.alerts.db.query('SELECT * FROM alert_notification_outbox');assert.equal(out.length,2);assert.equal(out.filter(x=>x.reason==='reminder').length,1);assert.equal(out[0].event_id,out[1].event_id);
+ await send(38);assert.equal((await f.alerts.db.query('SELECT * FROM alert_notification_outbox')).length,2);await send(29);assert.equal((await f.alerts.db.query('SELECT * FROM alert_notification_outbox')).length,3);assert.ok((await f.alerts.db.query('SELECT * FROM alert_events'))[0].resolved_at);
+ const invalid=await f.gateway.inject({method:'POST',url:'/api/alerts/rules',headers:{cookie:f.cookie},payload:{...rule(f.device.id),repeat_minutes:1}});assert.equal(invalid.statusCode,422);
+});
+
+test('análisis por minuto conserva cambios dentro de una hora y limita rangos grandes',async t=>{
+ const f=await fixture(t);const user=(await f.gateway.inject({url:'/api/auth/me',headers:{cookie:f.cookie}})).json().user;
+ const now=Date.now();for(const [offset,value] of [[120000,28],[60000,36]])await f.analysis.db.query('INSERT INTO analysis_samples(reading_id,device_id,owner_id,measured_at,received_at,temperature_c) VALUES($1,$2,$3,$4,$5,$6)',[randomUUID(),f.device.id,user.id,new Date(now-offset),new Date(now-offset),value]);
+ const base='/api/analysis/summary?device_id='+f.device.id;const result=await f.gateway.inject({url:base+'&period=1h&aggregation=minute',headers:{cookie:f.cookie}});assert.equal(result.statusCode,200);assert.equal(result.json().series.length,2);assert.equal(result.json().series[0].temperature_c,28);assert.equal(result.json().series[1].temperature_c,36);assert.equal((await f.gateway.inject({url:base+'&period=7d&aggregation=minute',headers:{cookie:f.cookie}})).statusCode,422);
+});
+
+
+test('recordatorios respetan dos horas y la opción sin repetición',async t=>{
+ const f=await fixture(t);const ids=[];for(const interval of [120,0]){const created=await f.gateway.inject({method:'POST',url:'/api/alerts/rules',headers:{cookie:f.cookie},payload:{...rule(f.device.id),repeat_minutes:interval}});assert.equal(created.statusCode,201);ids.push(created.json().rule.id);}
+ const send=async()=>{await new Promise(r=>setTimeout(r,5));await f.send({...f.payload(),measurements:{temperature_c:35}});await f.alerts.syncOnce();};await send();
+ await f.alerts.db.query('UPDATE alert_states SET last_notified_at=$1',[new Date(Date.now()-3600001)]);await send();assert.equal((await f.alerts.db.query('SELECT * FROM alert_notification_outbox')).length,2);
+ await f.alerts.db.query('UPDATE alert_states SET last_notified_at=$1',[new Date(Date.now()-7200001)]);await send();const reminders=await f.alerts.db.query("SELECT * FROM alert_notification_outbox WHERE reason='reminder'");assert.equal(reminders.length,1);const event=(await f.alerts.db.query('SELECT * FROM alert_events WHERE id=$1',[reminders[0].event_id]))[0];assert.equal(event.rule_id,ids[0]);
+});
+
+
+test('rango horario personalizado no se reduce a la última hora y mantiene aislamiento',async t=>{
+ const f=await fixture(t);const user=(await f.gateway.inject({url:'/api/auth/me',headers:{cookie:f.cookie}})).json().user;
+ for(const ago of [1,2,3,4,7])await f.analysis.db.query('INSERT INTO analysis_samples(reading_id,device_id,owner_id,measured_at,received_at,temperature_c) VALUES($1,$2,$3,$4,$5,$6)',[randomUUID(),f.device.id,user.id,new Date(Date.now()-ago*3600000),new Date(),30+ago]);
+ const base='/api/analysis/summary?device_id='+f.device.id;const result=await f.gateway.inject({url:base+'&period=5h&aggregation=hour',headers:{cookie:f.cookie}});assert.equal(result.statusCode,200);assert.equal(result.json().samples,4);assert.equal(result.json().series.length,4);
+ assert.equal((await f.gateway.inject({url:base+'&period=10000h',headers:{cookie:f.cookie}})).statusCode,422);assert.equal((await f.gateway.inject({url:base+'&period=5h'})).statusCode,401);
+});

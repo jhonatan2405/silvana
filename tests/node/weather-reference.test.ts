@@ -16,3 +16,10 @@ test('referencia: rechaza arrays desalineados sin inventar valores',async()=>{
  const bad=payload();bad.hourly.precipitation=[];let calls=0;const reference=createWeatherReference(async()=>{calls++;return Response.json(bad);},()=>initial);
  await assert.rejects(reference('24h'),/WEATHER_UNAVAILABLE/);await assert.rejects(reference('24h'),/WEATHER_UNAVAILABLE/);assert.equal(calls,1);
 });
+
+
+test('referencia conserva varias horas elegidas y limita el histórico externo explícitamente',async()=>{
+ const now=Date.parse('2026-11-11T22:30:00Z');const times=Array.from({length:8},(_,i)=>new Date(now-(7-i)*3600000).toISOString().slice(0,16));const values=times.map((_,i)=>25+i);
+ const provider=createWeatherReference(async()=>Response.json({latitude:8.75,longitude:-75.88,hourly:{time:times,temperature_2m:values,relative_humidity_2m:values,surface_pressure:values,precipitation:values}}),()=>now);
+ const result=await provider('6h');assert.equal(result.series.length,7);assert.ok(result.series.length>1);assert.ok((await provider('8760h')).coverage_note.includes('30 días'));
+});

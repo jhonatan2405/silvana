@@ -8,3 +8,9 @@ test('SKMR: no inventa reportes en respuesta vacía, ni acepta otra estación',a
  const empty=createAirportReference(async()=>new Response(null,{status:204}));assert.equal((await empty('24h')).series.length,0);
  const invalid=createAirportReference(async()=>Response.json([{icaoId:'SKBO',reportTime:new Date().toISOString(),temp:20}]));await assert.rejects(invalid('24h'),/AIRPORT_UNAVAILABLE/);
 });
+
+
+test('SKMR consulta varias horas y conserva todos los reportes del rango personalizado',async()=>{
+ const now=Date.parse('2026-11-11T22:30:00Z');const provider=createAirportReference(async url=>{assert.equal(new URL(String(url)).searchParams.get('hours'),'5');return Response.json(Array.from({length:5},(_,i)=>({icaoId:'SKMR',reportTime:new Date(now-i*3600000).toISOString(),temp:30+i,dewp:20,altim:1007})));},()=>now);
+ const data=await provider('5h');assert.equal(data.series.length,5);assert.ok(data.series[0].bucket<data.series[4].bucket);
+});
