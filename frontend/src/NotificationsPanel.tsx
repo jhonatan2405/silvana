@@ -14,6 +14,7 @@ export default function NotificationsPanel({onUnauthorized,onUpdate}:{onUnauthor
  async function mutate(path:string,body?:unknown,method='POST',success='Cambio guardado.'){if(busy)return false;setBusy(true);setError('');setNotice('');try{await request(path,{method,...(body?{body:JSON.stringify(body)}:{})},onUnauthorized);query.refresh();prefs.refresh();onUpdate();setNotice(success);notifySuccess(success);return true;}catch(error){setError((error as Error).message);notifyError((error as Error).message);return false;}finally{setBusy(false);}}
  async function savePreferences(next:Preferences){
   if(!preferenceData?.preferences.email_enabled&&next.email_enabled&&!await confirmAction('¿Activar los correos de Silvana?','Los próximos avisos se enviarán a '+preferenceData.email+'. No se enviarán avisos anteriores ni recordatorios por hora.','Activar correo'))return;
+  if(preferenceData?.preferences.email_enabled&&!next.email_enabled&&!await confirmAction('¿Desactivar los avisos por correo?','Dejarás de recibir nuevos correos de Silvana. Tus avisos seguirán disponibles en el centro web si lo mantienes activado.','Desactivar correo'))return;
   if(await mutate('/api/notifications/preferences',next,'PUT',next.email_enabled?'Preferencias guardadas. Correo activado.':'Preferencias guardadas.'))setDraft(null);
  }
  async function save(event:FormEvent){event.preventDefault();if(values)await savePreferences({...values});}

@@ -9,6 +9,7 @@
 #include <esp_system.h>
 #include <time.h>
 #include "config.h"
+#include "gateway_defaults.h"
 
 // Montaje probado por el usuario. No se envía directamente a Supabase.
 constexpr uint8_t DHT_PIN = 4;
@@ -22,6 +23,36 @@ String stationId, credential, gateway, wifiSsid, wifiPassword, pairingCode, pair
 String pending, commandBuffer;
 unsigned long lastAttempt = 0;
 bool firstAttempt = true;
+volatile uint8_t wifiFailureReason = 0;
+unsigned long wifiAttemptAt = 0, wifiReportAt = 0;
+bool wifiWasConnected = false;
+const char* wifiReasonText(uint8_t reason) {
+  switch (reason) {
+    case WIFI_REASON_NO_AP_FOUND: return "No se encuentra la red guardada: verifica nombre exacto, cobertura y 2.4 GHz.";
+    case WIFI_REASON_AUTH_FAIL: return "El router rechazó la autenticación; revisa clave y compatibilidad de seguridad.";
+    case WIFI_REASON_4WAY_HANDSHAKE_TIMEOUT:
+    case WIFI_REASON_HANDSHAKE_TIMEOUT: return "No se completó la autenticación: puede ser clave, señal o seguridad del router.";
+    case WIFI_REASON_ASSOC_FAIL: return "El router rechazó asociar el ESP32.";
+    default: return "Aún no se completa la conexión Wi-Fi.";
+  }
+}
+void serviceWifi() {
+  if (WiFi.status() == WL_CONNECTED) {
+    if (!wifiWasConnected) {
+      Serial.printf("Wi-Fi conectado a [%s] | IP: %s\n", wifiSsid.c_str(), WiFi.localIP().toString().c_str());
+      configTime(0, 0, "pool.ntp.org", "time.google.com"); firstAttempt = true;
+    }
+    wifiWasConnected = true; return;
+  }
+  wifiWasConnected = false;
+  if ((unsigned long)(millis() - wifiReportAt) >= 15000) {
+    wifiReportAt = millis(); Serial.printf("Wi-Fi pendiente [%s] | estado %d | motivo %u: %s\n", wifiSsid.c_str(), (int)WiFi.status(), wifiFailureReason, wifiReasonText(wifiFailureReason));
+  }
+  if ((unsigned long)(millis() - wifiAttemptAt) >= 45000) {
+    wifiAttemptAt = millis(); WiFi.reconnect(); Serial.println("Reintentando Wi-Fi; Gateway y vinculación se conservan.");
+  }
+}
+
 
 String randomHex(size_t length) {
   String out; out.reserve(length * 2);
@@ -56,6 +87,7 @@ bool prompt(const char* text, String& value, size_t maxLength, bool trim = true)
   Serial.println("Tiempo agotado. Repite el comando."); return false;
 }
 void connectWifi() {
+  wifiFailureReason = 0; wifiAttemptAt = wifiReportAt = millis(); wifiWasConnected = false;
   WiFi.disconnect(); WiFi.mode(WIFI_STA); WiFi.setAutoReconnect(true);
   WiFi.begin(wifiSsid.c_str(), wifiPassword.c_str()); configTime(0, 0, "pool.ntp.org", "time.google.com");
   Serial.println("Conectando a la red guardada. Comando wifi para cambiarla.");
@@ -69,13 +101,19 @@ void configure(const String& command) {
     wifiSsid = ssid; wifiPassword = password; connectWifi();
   } else if (command == "gateway") {
     String url;
-    if (!prompt("URL base del Gateway, sin /api (http://IP:8000 o https://dominio):", url, 240)) return;
+    if (!prompt("URL base del Gateway, sin /api (publico / local / http://IP:8000):", url, 240)) return;
+    if (url == "publico") url = PUBLIC_GATEWAY_URL;
+    else if (url == "local") {
+      url = prefs.getString("localGateway", "");
+      if (url.isEmpty()) { Serial.println("No hay Gateway local guardado. Introduce su URL una sola vez."); return; }
+    }
     if (!url.startsWith("http://") && !url.startsWith("https://")) { Serial.println("URL no válida."); return; }
     while (url.endsWith("/")) url.remove(url.length()-1);
     if (url.indexOf('@') >= 0 || url.indexOf('?') >= 0 || url.indexOf('#') >= 0) { Serial.println("Usa una URL base sin credenciales ni parámetros."); return; }
+    if (url.startsWith("http://") && !saveValue("localGateway", url)) return;
     if (!saveValue("gateway", url)) return;
     gateway = url; firstAttempt = true;
-    Serial.println("Gateway guardado. Para HTTPS configura su CA con el comando ca.");
+    Serial.println(url == PUBLIC_GATEWAY_URL ? "Gateway guardado. Modo público con HTTPS configurado; cambiar Wi-Fi no cambia el Gateway." : "Gateway guardado. Usa publico para volver al despliegue o local para recuperar esta dirección.");
   } else if (command == "vincular") {
     String code; if (!prompt("Código de 16 caracteres del dashboard:", code, 16) || code.length() != 16) return;
     code.toUpperCase();
@@ -97,6 +135,8 @@ void configure(const String& command) {
     if (saveValue("ca", ca)) { rootCa = ca; firstAttempt = true; Serial.println("CA guardada. Se verificará el certificado HTTPS."); }
   } else if (command == "estado") {
     Serial.printf("Wi-Fi: %s | Estación: %s | IP local: %s\n", WiFi.status() == WL_CONNECTED ? "conectado" : "sin conexión", stationId.isEmpty() ? "sin vincular" : stationId.c_str(), WiFi.localIP().toString().c_str());
+    Serial.printf("Red guardada: [%s] | %u caracteres | motivo Wi-Fi: %u (%s)\n", wifiSsid.c_str(), (unsigned)wifiSsid.length(), wifiFailureReason, wifiReasonText(wifiFailureReason));
+    Serial.printf("Gateway guardado: %s | Modo: %s\n", gateway.c_str(), gateway == PUBLIC_GATEWAY_URL ? "publico" : "personalizado/local");
     Serial.println("Comandos: wifi / gateway / vincular / ca / estado. Enviar con Nueva línea.");
   } else Serial.println("Comandos disponibles: wifi / gateway / vincular / ca / estado");
 }
@@ -131,15 +171,17 @@ int post(const String& path, const String& body, bool authenticate, String& resp
   WiFiClient plain; WiFiClientSecure secure; HTTPClient http;
   String url = gateway + path;
   if (gateway.startsWith("https://")) {
-    if (rootCa.isEmpty()) { Serial.println("Falta CA del Gateway: usa el comando ca. No se desactiva validación TLS."); return -1; }
-    secure.setCACert(rootCa.c_str()); secure.setHandshakeTimeout(10);
+    const char* trustedCa = gateway == PUBLIC_GATEWAY_URL ? PUBLIC_GATEWAY_CA : rootCa.c_str();
+    if (!trustedCa[0]) { Serial.println("Falta CA del Gateway: usa el comando ca. No se desactiva validación TLS."); return -1; }
+    secure.setCACert(trustedCa); secure.setHandshakeTimeout(20);
     if (!http.begin(secure, url)) return -1;
   } else if (!http.begin(plain, url)) return -1;
-  http.setConnectTimeout(5000); http.setTimeout(10000);
+  http.setConnectTimeout(gateway == PUBLIC_GATEWAY_URL ? 15000 : 5000); http.setTimeout(gateway == PUBLIC_GATEWAY_URL ? 60000 : 10000);
   http.addHeader("Content-Type", "application/json");
   if (authenticate) http.addHeader("Authorization", String("Bearer ") + credential);
   int status = http.POST(body);
   response = status > 0 ? http.getString() : "";
+  if (status < 0) Serial.printf("No se alcanzó %s: %s. Revisa estado y la red; no se borra la vinculación.\n", gateway.c_str(), HTTPClient::errorToString(status).c_str());
   http.end(); return status;
 }
 bool enroll() {
@@ -176,10 +218,12 @@ void setup() {
   pairingCode = prefs.getString("pairCode", ""); pairingKey = prefs.getString("pairKey", ""); rootCa = prefs.getString("ca", "");
   dht.begin(); pinMode(RAIN_PIN, INPUT); analogReadResolution(12); Wire.begin(21,22);
   bmpReady = bmp.begin(0x76); if (!bmpReady) bmpReady = bmp.begin(0x77);
+  WiFi.onEvent([](WiFiEvent_t event, WiFiEventInfo_t info) { wifiFailureReason = info.wifi_sta_disconnected.reason; }, ARDUINO_EVENT_WIFI_STA_DISCONNECTED);
   connectWifi(); Serial.println("Silvana · ESP32. Comandos: wifi / gateway / vincular / ca / estado.");
 }
 void loop() {
   readCommand();
+  serviceWifi();
   if (blocked || WiFi.status() != WL_CONNECTED) { delay(20); return; }
   if (!firstAttempt && (unsigned long)(millis() - lastAttempt) < 10000) { delay(10); return; }
   firstAttempt = false; lastAttempt = millis();
