@@ -55,6 +55,7 @@ export async function createAlerts(options:{databaseUrl?:string;logger?:boolean;
  });
  app.post('/alerts/rules',async(request,reply)=>{
   const data=createRule.parse(request.body),user=await ownedDevice(data.device_id,request.headers.cookie,authUrl,devicesUrl);
+  if(user.shared)throw new HttpError(403,'Solo el propietario puede crear reglas.');
   const result=await db.transaction(async tx=>{if(db.kind==='postgres')await tx.query('SELECT pg_advisory_xact_lock(hashtext($1))',[user.id]);if(Number((await tx.query('SELECT COUNT(*) AS count FROM alert_rules WHERE owner_id=$1 AND deleted=$2',[user.id,false]))[0].count)>=50)throw new HttpError(409,'Puedes mantener hasta 50 reglas.');const id=randomUUID(),now=new Date();await tx.query('INSERT INTO alert_rules(id,owner_id,device_id,name,metric,operator,threshold,enabled,deleted,created_at,updated_at,repeat_minutes) VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12)',[id,user.id,data.device_id,data.name,data.metric,data.operator,data.threshold,data.enabled,false,now,now,data.repeat_minutes]);return (await tx.query('SELECT * FROM alert_rules WHERE id=$1',[id]))[0];});
   return reply.code(201).send({rule:ruleView(result)});
  });

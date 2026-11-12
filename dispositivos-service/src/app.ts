@@ -36,6 +36,8 @@ export async function initializeDevices(db:Database){
   else if(!(await db.query('PRAGMA table_info(devices)')).some(row=>row.name===name))await db.exec(`ALTER TABLE devices ADD COLUMN ${name} ${type}`);
  }
  await db.exec(`CREATE UNIQUE INDEX IF NOT EXISTS ix_devices_hardware ON devices(hardware_id);CREATE TABLE IF NOT EXISTS pairing_codes(token_hash VARCHAR(64) PRIMARY KEY,owner_id VARCHAR(64) NOT NULL,device_id VARCHAR(64),expires_at ${db.kind==='postgres'?'TIMESTAMPTZ':'TEXT'} NOT NULL,hardware_id VARCHAR(40),credential_hash VARCHAR(64));`);
+ await db.exec(`CREATE TABLE IF NOT EXISTS device_shares(device_id VARCHAR(64) NOT NULL REFERENCES devices(id) ON DELETE CASCADE,user_id VARCHAR(64) NOT NULL,email VARCHAR(254) NOT NULL,created_at ${db.kind==='postgres'?'TIMESTAMPTZ':'TEXT'} NOT NULL,PRIMARY KEY(device_id,user_id));`);
+ if(db.kind==='postgres')await db.exec('ALTER TABLE device_shares ENABLE ROW LEVEL SECURITY; REVOKE ALL ON TABLE device_shares FROM anon,authenticated;');
  await db.exec(await readFile(new URL('../migrations/003_presence.sql',import.meta.url),'utf8'));
  if(db.kind==='postgres')await db.exec('ALTER TABLE device_presence ENABLE ROW LEVEL SECURITY; ALTER TABLE device_notification_outbox ENABLE ROW LEVEL SECURITY; ALTER TABLE device_notification_receipts ENABLE ROW LEVEL SECURITY; REVOKE ALL ON TABLE device_presence,device_notification_outbox,device_notification_receipts FROM anon, authenticated;');
  if(db.kind==='postgres')await db.transaction(async transaction=>{await transaction.exec('ALTER TABLE devices ENABLE ROW LEVEL SECURITY; ALTER TABLE pairing_codes ENABLE ROW LEVEL SECURITY');for(const role of ['anon','authenticated']){if((await transaction.query('SELECT 1 FROM pg_roles WHERE rolname=$1',[role])).length)await transaction.exec(`REVOKE ALL ON TABLE devices,pairing_codes FROM ${role}`);}});
@@ -86,6 +88,24 @@ export async function createDevices(options:{databaseUrl?:string;logger?:boolean
  app.post('/internal/notifications/ack',async request=>{authorizeInternal(request.headers['x-internal-token']);const data=z.object({ids:z.array(z.uuid()).min(1).max(200)}).strict().parse(request.body);await db.query('INSERT INTO device_notification_receipts(source_id) SELECT id FROM device_notification_outbox WHERE id IN ('+data.ids.map((_,i)=>'$'+(i+1)).join(',')+') ON CONFLICT(source_id) DO NOTHING',data.ids);return {acknowledged:true};});
 
 
+ app.get<{Params:{id:string}}>('/internal/devices/:id/recipients',async request=>{
+  authorizeInternal(request.headers['x-internal-token']);const device=(await db.query('SELECT owner_id FROM devices WHERE id=$1',[request.params.id]))[0];
+  if(!device)return {items:[]};
+  return {items:[{id:device.owner_id,shared_at:null},...(await db.query('SELECT user_id AS id,created_at AS shared_at FROM device_shares WHERE device_id=$1',[request.params.id])).map(row=>({...row,shared_at:utcDate(row.shared_at).toISOString()}))]};
+ });
+ app.get<{Params:{id:string}}>('/devices/:id/shares',async request=>{await owned(request.params.id,await currentUser(request.cookies));return {items:(await db.query('SELECT user_id,email,created_at FROM device_shares WHERE device_id=$1 ORDER BY email',[request.params.id])).map(row=>({...row,created_at:utcDate(row.created_at).toISOString()}))};});
+ app.post<{Params:{id:string}}>('/devices/:id/shares',async request=>{
+  const user=await currentUser(request.cookies);await owned(request.params.id,user);
+  const data=z.object({email:z.email().max(254).transform(value=>value.toLowerCase())}).strict().parse(request.body);
+  const response=await fetch(authUrl+'/internal/notification-recipients',{headers:{'x-internal-token':internalToken??''},signal:AbortSignal.timeout(8000)});
+  if(!response.ok)throw new HttpError(503,'No se pudo consultar la cuenta. Intenta nuevamente.');
+  const members=z.object({items:z.array(z.object({id:z.string(),email:z.email()}))}).parse(await response.json());const member=members.items.find(item=>item.email===data.email);
+  if(!member)throw new HttpError(404,'Ese correo todavía no está registrado en Silvana.');
+  if(member.id===user.id)throw new HttpError(409,'Ya eres propietario de esta estación.');
+  await db.query('INSERT INTO device_shares(device_id,user_id,email,created_at) VALUES($1,$2,$3,$4) ON CONFLICT(device_id,user_id) DO NOTHING',[request.params.id,member.id,member.email,new Date()]);
+  return {shared:true};
+ });
+ app.delete<{Params:{id:string;userId:string}}>('/devices/:id/shares/:userId',async request=>{await owned(request.params.id,await currentUser(request.cookies));await db.query('DELETE FROM device_shares WHERE device_id=$1 AND user_id=$2',[request.params.id,request.params.userId]);return {revoked:true};});
  app.post('/internal/devices/verify',async request=>{
 
   const supplied=request.headers['x-internal-token'];
@@ -157,7 +177,7 @@ export async function createDevices(options:{databaseUrl?:string;logger?:boolean
 
   const order=db.kind==='sqlite'?'datetime(created_at) DESC,id':'created_at DESC,id';
 
-  const rows=await db.query(`SELECT * FROM devices WHERE owner_id=$1 ORDER BY ${order} LIMIT $2 OFFSET $3`,[user.id,pagination.limit,pagination.offset]);return {items:rows.map(publicDevice),...pagination};
+  const rows=await db.query(`SELECT * FROM devices WHERE owner_id=$1 OR EXISTS(SELECT 1 FROM device_shares s WHERE s.device_id=devices.id AND s.user_id=$2) ORDER BY ${order} LIMIT $3 OFFSET $4`,[user.id,user.id,pagination.limit,pagination.offset]);return {items:rows.map(row=>({...publicDevice(row),shared:row.owner_id!==user.id})),...pagination};
 
  });
 
@@ -171,7 +191,7 @@ export async function createDevices(options:{databaseUrl?:string;logger?:boolean
 
  });
 
- app.get<{Params:{id:string}}>('/devices/:id',async request=>({device:publicDevice(await owned(request.params.id,await currentUser(request.cookies)))}));
+ app.get<{Params:{id:string}}>('/devices/:id',async request=>{const user=await currentUser(request.cookies);const row=(await db.query('SELECT * FROM devices WHERE id=$1 AND (owner_id=$2 OR EXISTS(SELECT 1 FROM device_shares s WHERE s.device_id=devices.id AND s.user_id=$3))',[request.params.id,user.id,user.id]))[0];if(!row)throw new HttpError(404,'Dispositivo no encontrado.');return {device:{...publicDevice(row),owner_id:row.owner_id,shared:row.owner_id!==user.id}};});
 
  app.put<{Params:{id:string}}>('/devices/:id',async request=>{
 

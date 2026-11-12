@@ -5,7 +5,7 @@ export async function getJson(url:string,init:RequestInit={}){
  return await response.json() as any;
 }
 export async function owner(cookie:string|undefined,authUrl:string){if(!cookie)throw new HttpError(401,'Inicia sesión para continuar.');const data=await getJson(authUrl+'/auth/me',{headers:{cookie}});if(typeof data.user?.id!=='string')throw new HttpError(503,'No se pudo verificar la sesión.');return data.user as {id:string};}
-export async function ownedDevice(id:string,cookie:string|undefined,authUrl:string,devicesUrl:string){const user=await owner(cookie,authUrl);await getJson(devicesUrl+'/devices/'+id,{headers:{cookie:cookie!}});return user;}
+export async function ownedDevice(id:string,cookie:string|undefined,authUrl:string,devicesUrl:string){const user=await owner(cookie,authUrl);const result=await getJson(devicesUrl+'/devices/'+id,{headers:{cookie:cookie!}});return {...user,id:result.device.owner_id??user.id,shared:result.device.shared===true};}
 export function createWorker(receptionUrl:string,token:string|undefined,consumer:'analysis'|'alerts',process:(items:any[])=>Promise<void>,since:()=>Promise<string|null>){
  let pending:Promise<void>|null=null,lastSuccess:string|null=null,lastError=false,catchingUp=false;
  const run=()=>{if(pending)return pending;pending=Promise.resolve().then(async()=>{try{

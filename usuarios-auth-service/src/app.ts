@@ -1,6 +1,6 @@
 import cookie from '@fastify/cookie';
 import * as argon2 from 'argon2';
-import { createHash, randomBytes } from 'node:crypto';
+import { createHash, randomBytes, timingSafeEqual } from 'node:crypto';
 import { readFile } from 'node:fs/promises';
 import { z } from 'zod';
 import { createHttp, HttpError } from './http.js';
@@ -20,7 +20,7 @@ export async function initializeAuth(db:Database){
   await db.exec('CREATE TABLE IF NOT EXISTS users(id VARCHAR(64) PRIMARY KEY,email VARCHAR(254) NOT NULL UNIQUE,name VARCHAR(100) NOT NULL,password_hash VARCHAR(255) NOT NULL,role VARCHAR(20) NOT NULL); CREATE TABLE IF NOT EXISTS sessions(token_hash VARCHAR(64) PRIMARY KEY,user_id VARCHAR(64) NOT NULL REFERENCES users(id),expires_at TEXT NOT NULL); CREATE INDEX IF NOT EXISTS ix_sessions_user_id ON sessions(user_id);');
  }
 }
-export async function createAuth(options:{databaseUrl?:string;logger?:boolean;origin?:string;secure?:boolean;hours?:number}={}){
+export async function createAuth(options:{databaseUrl?:string;logger?:boolean;origin?:string;secure?:boolean;hours?:number;internalToken?:string}={}){
  const db=openDatabase(options.databaseUrl??process.env.DATABASE_URL??'sqlite:///./usuarios.db',serviceRoot);
  try{await initializeAuth(db);}catch(error){await db.close();throw error;}
  const app=createHttp('usuarios-auth',options.origin??process.env.FRONTEND_ORIGIN??'http://localhost:5173',options.logger??true);
@@ -36,6 +36,12 @@ export async function createAuth(options:{databaseUrl?:string;logger?:boolean;or
  }
  const secure=options.secure??process.env.COOKIE_SECURE==='true';
  const hours=Math.max(1,Math.min(options.hours??(Number(process.env.SESSION_HOURS)||24),168));
+ const internalToken=options.internalToken??process.env.INTERNAL_SERVICE_TOKEN;
+ app.get('/internal/notification-recipients',async request=>{
+  const supplied=request.headers['x-internal-token'];
+  if(!internalToken||typeof supplied!=='string'||!timingSafeEqual(Buffer.from(digest(supplied)),Buffer.from(digest(internalToken))))throw new HttpError(403,'Acceso interno no permitido.');
+  return {items:await db.query('SELECT id,email FROM users ORDER BY id')};
+ });
  app.get('/health',async()=>({status:'ok',service:'usuarios-auth',runtime:'nodejs'}));
  app.get('/ready',async()=>{await db.query('SELECT id FROM users LIMIT 1');return {status:'ready'};});
  app.post('/auth/register',async(request,reply)=>{

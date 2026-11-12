@@ -14,7 +14,7 @@ export function childEnvironment(service,source=process.env){
  for(const key of Object.keys(env))if(key.endsWith('_DATABASE_URL')||key==='DATABASE_URL')delete env[key];
  Object.assign(env,{HOST:service.key?'127.0.0.1':'0.0.0.0',PORT:String(service.key?base+service.offset:Number(source.PORT??10000)),FRONTEND_ORIGIN:source.FRONTEND_ORIGIN??source.RENDER_EXTERNAL_URL??'http://localhost:5173',COOKIE_SECURE:source.COOKIE_SECURE??'true',AUTH_SERVICE_URL:'http://127.0.0.1:'+(base+1),DEVICES_SERVICE_URL:'http://127.0.0.1:'+(base+2),RECEPTION_SERVICE_URL:'http://127.0.0.1:'+(base+3),ANALYSIS_SERVICE_URL:'http://127.0.0.1:'+(base+4),ALERTS_SERVICE_URL:'http://127.0.0.1:'+(base+5),NOTIFICATIONS_SERVICE_URL:'http://127.0.0.1:'+(base+6)});
  if(service.key)env.DATABASE_URL=source[service.key];
- if(service.offset===1)delete env.INTERNAL_SERVICE_TOKEN;
+
  return env;
 }
 export async function start(){

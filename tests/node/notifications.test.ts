@@ -63,3 +63,31 @@ test('recordatorio de incidencia entrega otro aviso con la misma alerta y no se 
  await f.alerts.db.query('UPDATE alert_states SET last_notified_at=$1 WHERE rule_id=$2',[new Date(Date.now()-3600001),id]);await send(f,36);await f.notifications.syncOnce();await f.notifications.syncOnce();await f.notifications.sendEmails();
  const items=(await list(f)).json().items;const reminder=items.find((x:any)=>x.title.startsWith('Recordatorio:'));assert.ok(reminder);assert.equal(reminder.event_id,items.find((x:any)=>x.title.startsWith('Alerta:')).event_id);assert.equal(sent.filter(x=>x.title.startsWith('Recordatorio:')).length,1);
 });
+
+test('compartir estación limita acceso, activa avisos del invitado y permite revocar sin correo duplicado',async t=>{
+ const sent:any[]=[];const f=await notificationFixture(t,{mailer:{send:async mail=>{sent.push(mail)}}});
+ assert.equal((await fetch(f.authUrl+'/internal/notification-recipients')).status,403);assert.equal((await f.gateway.inject('/api/internal/notification-recipients')).statusCode,404);
+ const guest=await f.account('guest@example.com'),stranger=await f.account('stranger@example.com');
+ const headers={cookie:f.cookie},guestHeaders={cookie:guest};const path='/api/devices/'+f.device.id;
+ assert.equal((await f.gateway.inject({url:path,headers:guestHeaders})).statusCode,404);
+ assert.equal((await f.gateway.inject({method:'POST',url:path+'/shares',headers:{cookie:stranger},payload:{email:'guest@example.com'}})).statusCode,404);
+ assert.equal((await f.gateway.inject({method:'POST',url:path+'/shares',headers,payload:{email:'absent@example.com'}})).statusCode,404);
+ assert.equal((await f.gateway.inject({method:'POST',url:path+'/shares',headers,payload:{email:'guest@example.com'}})).statusCode,200);
+ assert.equal((await f.gateway.inject({url:'/api/devices',headers:guestHeaders})).json().items[0].shared,true);
+ assert.equal((await f.gateway.inject({url:path,headers:guestHeaders})).statusCode,200);
+ assert.equal((await f.gateway.inject({method:'DELETE',url:path,headers:guestHeaders})).statusCode,404);
+ await createRule(f);await send(f,35);await f.notifications.syncOnce();await f.notifications.sendEmails();await f.notifications.syncOnce();await f.notifications.sendEmails();
+ assert.equal((await f.gateway.inject({url:'/api/readings?device_id='+f.device.id,headers:guestHeaders})).statusCode,200);
+ await f.analysis.syncOnce();const summary=await f.gateway.inject({url:'/api/analysis/summary?device_id='+f.device.id,headers:guestHeaders});assert.equal(summary.statusCode,200);
+ const alerts=await f.gateway.inject({url:'/api/alerts?device_id='+f.device.id,headers:guestHeaders});assert.equal(alerts.statusCode,200);assert.equal(alerts.json().events.length,1);
+ assert.equal((await f.gateway.inject({method:'POST',url:'/api/alerts/rules',headers:guestHeaders,payload:rule(f.device.id)})).statusCode,403);
+ const inbox=(await f.gateway.inject({url:'/api/notifications',headers:guestHeaders})).json();assert.equal(inbox.counts.total,2);assert.equal(sent.length,2);assert.ok(sent.every(mail=>mail.to==='guest@example.com'));
+ assert.equal((await f.gateway.inject({url:'/api/notifications',headers:{cookie:stranger}})).json().counts.total,0);
+ await f.gateway.inject({method:'POST',url:'/api/notifications/'+inbox.items[0].id+'/read',headers:guestHeaders});assert.equal((await list(f)).json().counts.unread,2);
+ await send(f,28);await f.notifications.syncOnce();
+ const members=(await f.gateway.inject({url:path+'/shares',headers})).json().items;
+ assert.equal((await f.gateway.inject({method:'DELETE',url:path+'/shares/'+members[0].user_id,headers})).statusCode,200);
+ await f.notifications.sendEmails();assert.equal(sent.length,2);
+ assert.equal((await f.gateway.inject({url:'/api/readings?device_id='+f.device.id,headers:guestHeaders})).statusCode,404);
+ assert.equal((await f.gateway.inject({url:'/api/alerts?device_id='+f.device.id,headers:guestHeaders})).statusCode,404);
+});
