@@ -64,7 +64,7 @@ test('recordatorio de incidencia entrega otro aviso con la misma alerta y no se 
  const items=(await list(f)).json().items;const reminder=items.find((x:any)=>x.title.startsWith('Recordatorio:'));assert.ok(reminder);assert.equal(reminder.event_id,items.find((x:any)=>x.title.startsWith('Alerta:')).event_id);assert.equal(sent.filter(x=>x.title.startsWith('Recordatorio:')).length,1);
 });
 
-test('compartir estación limita acceso, activa avisos del invitado y permite revocar sin correo duplicado',async t=>{
+test('compartir estaciÃ³n limita acceso, activa avisos del invitado y permite revocar sin correo duplicado',async t=>{
  const sent:any[]=[];const f=await notificationFixture(t,{mailer:{send:async mail=>{sent.push(mail)}}});
  assert.equal((await fetch(f.authUrl+'/internal/notification-recipients')).status,403);assert.equal((await f.gateway.inject('/api/internal/notification-recipients')).statusCode,404);
  const guest=await f.account('guest@example.com'),stranger=await f.account('stranger@example.com');

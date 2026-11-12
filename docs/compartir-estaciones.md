@@ -1,13 +1,13 @@
 # Compartir estaciones
 
-En Dispositivos, el propietario abre **Compartir estaciÛn**, escribe el correo de una cuenta registrada y comparte el acceso. La estaciÛn aparecer· en el listado de esa persona al actualizar. El acceso permite consultar recepciÛn, an·lisis, comparaciÛn externa, reglas e historial de alertas. Las acciones de administraciÛn siguen reservadas al propietario.
+En Dispositivos, el propietario abre **Compartir estaci√≥n**, escribe el correo de una cuenta registrada y comparte el acceso. La estaci√≥n aparecer√° en el listado de esa persona al actualizar. El acceso permite consultar recepci√≥n, an√°lisis, comparaci√≥n externa, reglas e historial de alertas. Las acciones de administraci√≥n siguen reservadas al propietario.
 
-Los nuevos eventos se distribuyen al propietario y a los miembros con acceso. En el primer evento tras compartir se activan las preferencias web, correo y tipos de aviso del invitado autom·ticamente. DespuÈs puede modificarlas en Notificaciones. No se envÌan alertas anteriores a la fecha de compartir. Cada persona tiene su propia bandeja y estado de lectura. No se copian mediciones ni se entregan credenciales del ESP32.
+Los nuevos eventos se distribuyen al propietario y a los miembros con acceso. En el primer evento tras compartir se activan las preferencias web, correo y tipos de aviso del invitado autom√°ticamente. Despu√©s puede modificarlas en Notificaciones. No se env√≠an alertas anteriores a la fecha de compartir. Cada persona tiene su propia bandeja y estado de lectura. No se copian mediciones ni se entregan credenciales del ESP32.
 
 El propietario puede retirar el acceso. Se bloquean las consultas posteriores y se cancelan los correos pendientes al procesarlos; los avisos ya recibidos permanecen en la bandeja personal. Compartir de nuevo habilita otra vez los nuevos avisos.
 
-## OperaciÛn
+## Operaci√≥n
 
-El arranque crea `device_shares` en dispositivos y `notification_share_grants` en notificaciones de forma idempotente, con RLS y sin acceso p˙blico en PostgreSQL. Usuarios expone un directorio mÌnimo interno protegido por `INTERNAL_SERVICE_TOKEN`; cada servicio conserva su base independiente. Localmente usuarios debe tener el mismo token interno de dispositivos y notificaciones. Render lo hereda del supervisor. El frontend solo llama al Gateway.
+El arranque crea `device_shares` en dispositivos y `notification_share_grants` en notificaciones de forma idempotente, con RLS y sin acceso p√∫blico en PostgreSQL. Usuarios expone un directorio m√≠nimo interno protegido por `INTERNAL_SERVICE_TOKEN`; cada servicio conserva su base independiente. Localmente usuarios debe tener el mismo token interno de dispositivos y notificaciones. Render lo hereda del supervisor. El frontend solo llama al Gateway.
 
-Estos cambios deben desplegarse tanto en Render como en Vercel para utilizarlos p˙blicamente. El envÌo real depende de que el transporte de correo estÈ configurado y operativo.
+Estos cambios deben desplegarse tanto en Render como en Vercel para utilizarlos p√∫blicamente. El env√≠o real depende de que el transporte de correo est√© configurado y operativo.

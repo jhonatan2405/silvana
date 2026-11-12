@@ -100,8 +100,8 @@ export async function createDevices(options:{databaseUrl?:string;logger?:boolean
   const response=await fetch(authUrl+'/internal/notification-recipients',{headers:{'x-internal-token':internalToken??''},signal:AbortSignal.timeout(8000)});
   if(!response.ok)throw new HttpError(503,'No se pudo consultar la cuenta. Intenta nuevamente.');
   const members=z.object({items:z.array(z.object({id:z.string(),email:z.email()}))}).parse(await response.json());const member=members.items.find(item=>item.email===data.email);
-  if(!member)throw new HttpError(404,'Ese correo todavÌa no est· registrado en Silvana.');
-  if(member.id===user.id)throw new HttpError(409,'Ya eres propietario de esta estaciÛn.');
+  if(!member)throw new HttpError(404,'Ese correo todav√≠a no est√° registrado en Silvana.');
+  if(member.id===user.id)throw new HttpError(409,'Ya eres propietario de esta estaci√≥n.');
   await db.query('INSERT INTO device_shares(device_id,user_id,email,created_at) VALUES($1,$2,$3,$4) ON CONFLICT(device_id,user_id) DO NOTHING',[request.params.id,member.id,member.email,new Date()]);
   return {shared:true};
  });
