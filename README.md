@@ -4,6 +4,16 @@ Sistema de monitoreo ambiental IoT desarrollado con React, Three.js y seis micro
 
 El proyecto se organiza en un monorepositorio: cada microservicio conserva su código, API, configuración, migraciones y base de datos independiente. El frontend y la estación acceden al backend mediante el API Gateway.
 
+## Autoría y derechos de uso
+
+**Copyright (c) 2026 jhonatan2405, juanxpz1 y los demás titulares de las contribuciones originales de Silvana. Todos los derechos reservados sobre sus respectivas aportaciones.**
+
+Este repositorio es público para presentar el proyecto y facilitar su revisión académica. Su publicación no concede una licencia de código abierto ni autoriza a presentar el proyecto, su código, diseño o documentación como trabajo propio, aunque se cambie el nombre o se mencione a sus autores.
+
+Para reutilizar, modificar, redistribuir o comercializar material original del proyecto fuera de los permisos legales y de la plataforma, solicita autorización previa y por escrito a sus titulares. Las dependencias y materiales de terceros mantienen sus propias licencias. Consulta el archivo [LICENSE](LICENSE).
+
+Autores del equipo: [jhonatan2405](https://github.com/jhonatan2405) y [juanxpz1](https://github.com/juanxpz1). El historial de commits documenta las contribuciones al repositorio.
+
 ## Arquitectura
 
 ```mermaid
